@@ -1,0 +1,8 @@
+{
+  "id": "dragonfly-for-hestia",
+  "slug": "dragonfly",
+  "title": "Dragonfly for Hestia",
+  "version": "0.4.0",
+  "command": "v-dragonfly-hestia",
+  "service": "dragonfly"
+}
