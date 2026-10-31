@@ -1,7 +1,7 @@
 # Dragonfly for Hestia
 
 One shared Dragonfly service, separate credentials for each Hestia user and a
-separate cache prefix for each site. Version **0.4.2** Ξ’Β· GPL-3.0-or-later.
+separate cache prefix for each site. Version **0.4.3** Ξ’Β· GPL-3.0-or-later.
 
 ## Quick start
 
@@ -27,15 +27,11 @@ Run commands over SSH as an administrator. The installer also installs Dragonfly
    sudo systemctl is-active dragonfly
    ```
 
-4. **Log into Hestia as the site owner and open:**
+4. **Log into Hestia as the site owner. Click Plugins → Dragonfly in the top bar.**
 
-   ```text
-   https://YOUR-SERVER:8083/plugins/dragonfly/
-   ```
-
-   Click **Open Dragonfly for Hestia**, then copy the connection details and
-   site's prefix into your application's object-cache settings. An administrator
-   can use Hestia's **Log in as** action to open the owner's account.
+   Copy the connection details and site's prefix into your application's
+   object-cache settings. Administrators can use Hestia's **Log in as**
+   action to open the owner's account.
 
 Done. Existing users and sites are added during installation; new ones are picked
 up automatically within a minute. Each owner can change their cache password,

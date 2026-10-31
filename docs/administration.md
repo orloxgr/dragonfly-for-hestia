@@ -4,7 +4,7 @@ An independent Hestia addon for one shared Dragonfly service, with personal
 credentials, native database isolation and a separate prefix for every website.
 Existing Hestia code and templates are not replaced.
 
-Version **0.4.2**.
+Version **0.4.3**.
 
 Source repository: [orloxgr/dragonfly-for-hestia](https://github.com/orloxgr/dragonfly-for-hestia).
 
@@ -238,3 +238,14 @@ GPL-3.0-or-later; see `LICENSE`.
 - [Dragonfly 2.0.2](https://github.com/dragonflydb/dragonfly/releases/tag/v2.0.2)
 - [Dragonfly ACL](https://www.dragonflydb.io/docs/managing-dragonfly/acl)
 - [Hestia customisation](https://hestiacp.com/docs/server-administration/customisation)
+
+## Panel menu
+
+Hestia automatically includes the addon-owned `dragonfly-for-hestia.js` script from
+`/usr/local/hestia/web/js/custom_scripts/`. Installed addons share one **Plugins**
+dropdown; each installer and uninstaller manages only its own script. Native
+Hestia login, account context and permission checks continue to apply. If the
+header layout is unfamiliar, the script leaves the page alone; the direct
+`/plugins/dragonfly/` URL remains available.
+
+See [Hestia’s custom-script extension point](https://github.com/hestiacp/hestiacp/blob/1.10.5/web/js/custom_scripts/README.txt).
