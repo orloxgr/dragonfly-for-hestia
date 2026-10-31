@@ -1,7 +1,7 @@
 # Dragonfly for Hestia
 
 One shared Dragonfly service, separate credentials for each Hestia user and a
-separate cache prefix for each site. Version **0.4.3** Ξ’Β· GPL-3.0-or-later.
+separate cache prefix for each site. Version **0.4.4** Ξ’Β· GPL-3.0-or-later.
 
 ## Quick start
 

@@ -66,71 +66,74 @@ if (isset($_POST['enabled'])) {
     }
     $request['enabled'] = $_POST['enabled'] === '1';
 }
-$pipes = [];
-$process = proc_open(['/usr/bin/sudo', '-n', $root . '/bin/' . $meta['command']],
-    [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
-if (!is_resource($process)) {
-    $respond(503, ['ok' => false, 'error' => 'Addon bridge unavailable.']);
-}
-fwrite($pipes[0], json_encode($request, JSON_THROW_ON_ERROR));
-fclose($pipes[0]);
-$output = stream_get_contents($pipes[1], 1048576);
-fclose($pipes[1]);
-stream_get_contents($pipes[2], 4096);
-fclose($pipes[2]);
-$code = proc_close($process);
-$data = json_decode($output, true);
+$jsonResponse = ($_GET['format'] ?? '') === 'json' ||
+    ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['display'] ?? '') !== 'html');
+$bridge = static function (array $payload) use ($root, $meta): array {
+    $pipes = [];
+    $process = proc_open(['/usr/bin/sudo', '-n', $root . '/bin/' . $meta['command']],
+        [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+    if (!is_resource($process)) {
+        return [1, null];
+    }
+    fwrite($pipes[0], json_encode($payload, JSON_THROW_ON_ERROR));
+    fclose($pipes[0]);
+    $output = stream_get_contents($pipes[1], 1048576);
+    fclose($pipes[1]);
+    stream_get_contents($pipes[2], 4096);
+    fclose($pipes[2]);
+    return [proc_close($process), json_decode($output, true)];
+};
+[$code, $data] = $bridge($request);
+$pageError = '';
 if ($code !== 0 || !is_array($data) || empty($data['ok'])) {
-    $respond(403, ['ok' => false, 'error' => 'Request refused or service unavailable.']);
-}
-if (($_GET['format'] ?? '') === 'json' || ($_SERVER['REQUEST_METHOD'] === 'POST' &&
-    ($_POST['display'] ?? '') !== 'html')) {
+    if ($jsonResponse) {
+        $respond(403, ['ok' => false, 'error' => 'Request refused or service unavailable.']);
+    }
+    // Hestia intercepts 4xx pages. Render form errors normally; JSON requests
+    // still receive the 403 response above.
+    $pageError = $action === 'test'
+        ? 'Connection test failed. Dragonfly is unavailable or cache access for this site is disabled.'
+        : 'The operation could not be completed. Check that the service is running and access is enabled.';
+    [$status, $current] = $bridge(['actor' => $actor, 'owner' => $owner, 'action' => 'inventory']);
+    $data = $status === 0 && is_array($current) && !empty($current['ok']) ? $current : ['sites' => []];
+} elseif ($jsonResponse) {
     $respond(200, $data);
 }
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($data['connection']) && !isset($data['connection_ok']) &&
-    !isset($data['removed_keys'])) {
-    header('Location: ./');
-    exit;
-}
+header('Content-Type: text/html; charset=utf-8');
 $escape = static fn($s) => htmlspecialchars((string)$s, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-?><!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
-<title><?= $escape($meta['title']) ?></title>
-<style>body{font:16px system-ui;background:#f4f6f8;color:#1d2939;margin:3rem auto;max-width:900px;padding:0 20px}main{background:white;border:1px solid #d0d5dd;border-radius:12px;padding:28px}a{color:#175cd3}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:14px 8px;border-bottom:1px solid #eaecf0}small{color:#475467}</style>
-</head><body><main>
-<a href="/list/web/">Back to Hestia websites</a>
-<h1><?= $escape($meta['title']) ?></h1>
-<p>Account: <strong><?= $escape($owner) ?></strong></p>
-<?php if (empty($data['service_installed']) && !isset($data['connection']) && !isset($data['connection_ok']) && !isset($data['removed_keys'])): ?>
-<p>Service management has not been installed yet.</p>
-<?php else: ?>
-<p>Dragonfly: <strong><?= !empty($data['enabled']) && !empty($data['allowed']) ? 'Enabled' : 'Disabled' ?></strong></p>
-<form method="post"><input type="hidden" name="token" value="<?= $escape($_SESSION['token']) ?>"><input type="hidden" name="display" value="html"><input type="hidden" name="action" value="credentials"><button>Show my connection details</button></form>
-<?php if (isset($data['connection'])): ?>
-<dl><?php foreach ($data['connection'] as $key => $value): ?><dt><?= $escape($key) ?></dt><dd><code><?= $escape($value) ?></code></dd><?php endforeach; ?></dl>
-<?php endif; ?>
-<?php if (isset($data['connection_ok'])): ?><p>Connection test: <?= $data['connection_ok'] ? 'Passed' : 'Failed' ?></p><?php endif; ?>
-<?php if (isset($data['removed_keys'])): ?><p>Removed <?= $escape($data['removed_keys']) ?> cache entries.</p><?php endif; ?>
-<form method="post"><input type="hidden" name="token" value="<?= $escape($_SESSION['token']) ?>"><input type="hidden" name="display" value="html"><input type="hidden" name="action" value="password"><label>New Dragonfly password <input type="password" name="password" minlength="12" maxlength="256" required autocomplete="new-password"></label><button>Change my password</button></form>
-<form method="post"><input type="hidden" name="token" value="<?= $escape($_SESSION['token']) ?>"><input type="hidden" name="display" value="html"><input type="hidden" name="action" value="toggle-account"><input type="hidden" name="enabled" value="<?= empty($data['enabled']) ? '1' : '0' ?>"><button><?= empty($data['enabled']) ? 'Enable' : 'Disable' ?> Dragonfly for my account</button></form>
-<?php endif; ?>
-<table><thead><tr><th>Website</th><th>Aliases</th><th>Status</th></tr></thead><tbody>
-<?php foreach ($data['sites'] as $site): ?>
-<tr><td><?= $escape($site['domain']) ?><?php if (isset($site['prefix'])): ?><br><small>Prefix: <code><?= $escape($site['prefix']) ?></code></small><?php endif; ?></td><td><?= $escape(implode(', ', $site['aliases'])) ?></td><td><?= $site['suspended'] ? 'Suspended' : 'Active' ?>
-<?php if (isset($site['enabled'])): ?>
-<form method="post"><input type="hidden" name="token" value="<?= $escape($_SESSION['token']) ?>"><input type="hidden" name="display" value="html"><input type="hidden" name="domain" value="<?= $escape($site['domain']) ?>"><button name="action" value="test">Test connection</button><button name="action" value="flush">Clear this site</button></form>
-<form method="post"><input type="hidden" name="token" value="<?= $escape($_SESSION['token']) ?>"><input type="hidden" name="display" value="html"><input type="hidden" name="domain" value="<?= $escape($site['domain']) ?>"><input type="hidden" name="enabled" value="<?= $site['enabled'] ? '0' : '1' ?>"><button name="action" value="toggle-site"><?= $site['enabled'] ? 'Disable' : 'Enable' ?></button></form>
-<?php endif; ?></td></tr>
-<?php endforeach; ?>
-</tbody></table>
-<form method="post">
-<input type="hidden" name="token" value="<?= $escape($_SESSION['token']) ?>">
-<input type="hidden" name="action" value="validate-site">
-<label>Website <select name="domain">
-<?php foreach ($data['sites'] as $site): ?>
-<option value="<?= $escape($site['domain']) ?>"><?= $escape($site['domain']) ?></option>
-<?php endforeach; ?>
-</select></label> <button type="submit">Check site access</button>
-</form>
-<small>Version <?= $escape($meta['version']) ?></small>
-</main></body></html>
+$managed = !empty($data['service_installed']) || isset($data['enabled']);
+$selectedDomain = is_string($_POST['domain'] ?? null) ? $_POST['domain'] : ($data['sites'][0]['domain'] ?? '');
+$message = '';
+$messageType = 'success';
+if ($pageError === '' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    if ($action === 'test' && isset($data['connection_ok'])) {
+        $messageType = $data['connection_ok'] ? 'success' : 'danger';
+        $message = $data['connection_ok']
+            ? 'Connection test passed for ' . $selectedDomain . ': Dragonfly authenticated, stored, read and deleted a test key.'
+            : 'Connection test failed for ' . $selectedDomain . ': the stored value could not be read back.';
+    } elseif ($action === 'flush') {
+        $message = isset($data['removed_keys']) ? 'Cleared ' . $data['removed_keys'] . ' cache entries for ' . $selectedDomain . '.'
+            : 'The cache for ' . $selectedDomain . ' was cleared.';
+    } elseif ($action === 'password') {
+        $message = 'Your Dragonfly password was changed.';
+    } elseif ($action === 'token') {
+        $message = 'The purge token for ' . $selectedDomain . ' was changed.';
+    } elseif ($action === 'configure-site') {
+        $message = 'The profile and VCL for ' . $selectedDomain . ' were applied.';
+    } elseif ($action === 'toggle-site') {
+        $message = 'Cache access for ' . $selectedDomain . ' was ' . (!empty($request['enabled']) ? 'enabled.' : 'disabled.');
+    } elseif ($action === 'toggle-account') {
+        $message = 'Cache access for this account was ' . (!empty($data['enabled']) ? 'enabled.' : 'disabled.');
+    } elseif ($action === 'validate-site') {
+        $message = 'Website access was verified.';
+    }
+}
+$formFields = static function (string $operation, ?string $domain = null) use ($escape): void {
+    echo '<input type="hidden" name="token" value="' . $escape($_SESSION['token']) . '">';
+    echo '<input type="hidden" name="display" value="html">';
+    echo '<input type="hidden" name="action" value="' . $escape($operation) . '">';
+    if ($domain !== null) {
+        echo '<input type="hidden" name="domain" value="' . $escape($domain) . '">';
+    }
+};
+require '__INSTALL_ROOT__/panel/view.php';

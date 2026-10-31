@@ -5,6 +5,7 @@ import datetime
 import json
 from pathlib import Path
 import re
+import secrets
 import subprocess
 import time
 
@@ -348,8 +349,10 @@ def request(hestia, owner_name, action, payload):
         if domain is None or not allowed(owner,config) or not owner['sites'][domain]['enabled']:
             raise ValueError('Select an enabled site')
         with Client(owner['password'],owner['username'],config['port']) as connection:
-            probe = owner['sites'][domain]['prefix']+'connection-test'
-            connection.command('SET',probe,'ok','EX',10)
-            response['connection_ok'] = connection.command('GET',probe) == b'ok'
-            connection.command('DEL',probe)
+            probe = owner['sites'][domain]['prefix']+'connection-test:'+secrets.token_hex(16)
+            try:
+                connection.command('SET',probe,'ok','EX',10)
+                response['connection_ok'] = connection.command('GET',probe) == b'ok'
+            finally:
+                connection.command('DEL',probe)
     return response

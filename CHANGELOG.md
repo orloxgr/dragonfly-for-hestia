@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.4
+
+- Render addon pages with Hestia’s native header, navigation, selected theme, forms and alerts.
+- Keep owner actions in HTML and show visible success or failure feedback.
+- Remove the legacy website-access probe from the owner interface.
+- Test cache connections with a unique expiring key and clean it up after the read/write check.
+
 ## 0.4.3
 
 - Add a Plugins menu in Hestia’s top bar through its native custom-scripts loader.
