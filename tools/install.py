@@ -8,10 +8,12 @@ import os
 from pathlib import Path
 import re
 import secrets
+import shlex
 import shutil
 import socket
 import subprocess
 import sys
+import traceback
 import urllib.request
 
 SOURCE = Path(__file__).resolve().parents[1]
@@ -36,7 +38,11 @@ RECEIPT = service.STORE/'install-receipt.json'
 def run(*args,**options):
     result = subprocess.run(args,capture_output=True,timeout=600,**options)
     if result.returncode:
-        raise RuntimeError('Installation operation failed: '+args[0])
+        for label, output in (('stdout', result.stdout), ('stderr', result.stderr)):
+            if output:
+                text = output.decode(errors='replace') if isinstance(output, bytes) else output
+                sys.stderr.write(label + ':\n' + text.rstrip() + '\n')
+        raise RuntimeError('Command failed (exit ' + str(result.returncode) + '): ' + shlex.join(args))
     return result
 
 
@@ -255,9 +261,8 @@ if __name__ == '__main__':
         with exclusive():
             install(args)
     except Exception as error:
-        # Installation logs never dump an ACL, manifest, subprocess command line
-        # containing a secret, or an arbitrary server error response.
+        # This is the administrator's installer, not a hosting-user response.
+        traceback.print_exc(file=sys.stderr)
         print(json.dumps({'ok':False,'error_type':type(error).__name__,
-                          'error':str(error) if isinstance(error,(ValueError,RuntimeError))
-                          else 'Installation failed; inspect prerequisites and retry'}))
+                          'error':str(error)}))
         raise SystemExit(1)
