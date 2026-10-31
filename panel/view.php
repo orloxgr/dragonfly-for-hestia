@@ -1,9 +1,10 @@
 <?php
 require $root . '/web/templates/header.php';
-$panel = top_panel($owner, $TAB);
+$panel = top_panel($headerOwner, $TAB);
 ?>
 <script>document.title = <?= json_encode($meta['title'], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;</script>
 <div class="toolbar"><div class="toolbar-inner"><div class="toolbar-buttons">
+    <?php if ($isAdmin): ?><a class="button button-secondary" href="./">All accounts</a><?php endif; ?>
     <a class="button button-secondary" href="/list/web/"><i class="fas fa-arrow-left icon-blue"></i>Back</a>
 </div></div></div>
 <div class="container"><div class="form-container form-container-wide">

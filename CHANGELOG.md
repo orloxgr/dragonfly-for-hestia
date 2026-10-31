@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.0
+
+- Add an administrator dashboard listing all native accounts and websites.
+- Add bulk account/site enable and disable, plus direct owner management.
+
 ## 0.4.4
 
 - Render addon pages with Hestia’s native header, navigation, selected theme, forms and alerts.
