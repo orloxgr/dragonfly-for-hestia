@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.1
+
+- Fix dropdown links closing before pointer clicks can navigate.
+- Preserve internal keyboard focus and navigation when another installed addon still has an older menu script.
+
 ## 0.5.0
 
 - Add an administrator dashboard listing all native accounts and websites.

@@ -4,7 +4,7 @@ An independent Hestia addon for one shared Dragonfly service, with personal
 credentials, native database isolation and a separate prefix for every website.
 Existing Hestia code and templates are not replaced.
 
-Version **0.5.0**.
+Version **0.5.1**.
 
 Source repository: [orloxgr/dragonfly-for-hestia](https://github.com/orloxgr/dragonfly-for-hestia).
 

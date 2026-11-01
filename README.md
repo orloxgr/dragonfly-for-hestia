@@ -1,7 +1,7 @@
 # Dragonfly for Hestia
 
 One shared Dragonfly service, separate credentials for each Hestia user and a
-separate cache prefix for each site. Version **0.5.0** Ξ’Β· GPL-3.0-or-later.
+separate cache prefix for each site. Version **0.5.1** Ξ’Β· GPL-3.0-or-later.
 
 ## Quick start
 
@@ -53,6 +53,7 @@ sudo python3 /usr/local/src/dragonfly-for-hestia/tools/install.py
 ```
 
 Updates retain existing passwords, site settings and memory budget.
+Refresh Hestia with **Ctrl+F5** after updating to load the new menu script.
 
 For changing RAM, backup, restore, removal or importing an existing Dragonfly,
 see the [administration reference](docs/administration.md).
