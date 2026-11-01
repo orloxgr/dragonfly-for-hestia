@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.2
+
+- Show the website selector and its cache prefix together with all connection details.
+- Add a direct connection-details action for each website and jump to the selected details.
+
 ## 0.5.1
 
 - Fix dropdown links closing before pointer clicks can navigate.

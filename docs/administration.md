@@ -4,7 +4,7 @@ An independent Hestia addon for one shared Dragonfly service, with personal
 credentials, native database isolation and a separate prefix for every website.
 Existing Hestia code and templates are not replaced.
 
-Version **0.5.1**.
+Version **0.5.2**.
 
 Source repository: [orloxgr/dragonfly-for-hestia](https://github.com/orloxgr/dragonfly-for-hestia).
 
@@ -75,6 +75,10 @@ websites**. Account selections include all their websites. **Manage account** an
 **Manage website** open the owner controls directly. Website changes retain the
 separate account enable/disable choice. Native suspension and package restrictions
 continue to apply. Hestia's **Log in as** still opens the selected owner's view.
+
+**Show connection details** displays the website selector, its cache prefix, host,
+port, username, password and database together. Changing the website immediately
+updates the displayed prefix. Each website also has a direct connection-details button.
 
 The owner can view personal connection details and each site's prefix, change the
 Dragonfly password, test a site's actual connection, clear only its cache entries,

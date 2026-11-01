@@ -2,7 +2,7 @@
   "id": "dragonfly-for-hestia",
   "slug": "dragonfly",
   "title": "Dragonfly for Hestia",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "command": "v-dragonfly-hestia",
   "service": "dragonfly"
 }

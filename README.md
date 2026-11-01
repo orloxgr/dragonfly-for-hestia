@@ -1,7 +1,7 @@
 # Dragonfly for Hestia
 
 One shared Dragonfly service, separate credentials for each Hestia user and a
-separate cache prefix for each site. Version **0.5.1** Ξ’Β· GPL-3.0-or-later.
+separate cache prefix for each site. Version **0.5.2** Ξ’Β· GPL-3.0-or-later.
 
 ## Quick start
 
@@ -29,8 +29,9 @@ Run commands over SSH as an administrator. The installer also installs Dragonfly
 
 4. **Log into Hestia as the site owner. Click Plugins → Dragonfly in the top bar.**
 
-   Copy the connection details and site's prefix into your application's
-   object-cache settings. Administrators see all accounts and websites, with
+   Click **Show connection details**, choose the website and copy the displayed
+   credentials, database and cache prefix into your application's object-cache settings.
+   Administrators see all accounts and websites, with
    bulk enable/disable controls and links to manage each account.
 
 Done. Existing users and sites are added during installation; new ones are picked

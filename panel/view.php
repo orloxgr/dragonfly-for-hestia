@@ -20,12 +20,35 @@ $panel = top_panel($headerOwner, $TAB);
             Dragonfly: <strong><?= !empty($data['enabled']) && !empty($data['allowed']) ? 'Enabled' : 'Disabled' ?></strong></p>
         <?php if (empty($data['allowed'])): ?><div class="alert alert-info u-mb20" role="status"><p>The hosting package does not currently allow Dragonfly.</p></div><?php endif; ?>
         <div class="toolbar-buttons u-mb20">
-            <form method="post"><?php $formFields('credentials'); ?><button type="submit" class="button button-secondary"><i class="fas fa-key icon-orange"></i>Show connection details</button></form>
+            <form method="post" action="#connection-details"><?php $formFields('credentials'); ?><button type="submit" class="button button-secondary"><i class="fas fa-key icon-orange"></i>Show connection details</button></form>
             <form method="post"><?php $formFields('toggle-account'); ?><input type="hidden" name="enabled" value="<?= empty($data['enabled']) ? '1' : '0' ?>"><button type="submit" class="button button-secondary"><?= empty($data['enabled']) ? 'Enable' : 'Disable' ?> for this account</button></form>
         </div>
         <?php if (isset($data['connection'])): ?>
-            <section class="u-mb20" aria-label="Connection details">
+            <section class="u-mb20" id="connection-details" aria-label="Connection details" style="scroll-margin-top: 100px">
                 <h2 class="u-mb20">Connection details</h2>
+                <?php
+                $connectionSite = $data['sites'][0] ?? null;
+                foreach ($data['sites'] as $candidate) {
+                    if ($candidate['domain'] === $selectedDomain) { $connectionSite = $candidate; break; }
+                }
+                ?>
+                <?php if ($connectionSite !== null): ?>
+                    <div class="u-mb10"><label class="form-label" for="connection-site">Website</label>
+                        <select class="form-select" id="connection-site">
+                            <?php foreach ($data['sites'] as $candidate): ?>
+                                <option value="<?= $escape($candidate['domain']) ?>" data-cache-prefix="<?= $escape($candidate['prefix']) ?>" <?= $candidate['domain'] === $connectionSite['domain'] ? 'selected' : '' ?>><?= $escape($candidate['domain']) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="u-mb10"><label class="form-label" for="connection-prefix">Cache prefix / namespace</label>
+                        <input class="form-control" id="connection-prefix" type="text" value="<?= $escape($connectionSite['prefix']) ?>" readonly autocomplete="off">
+                    </div>
+                    <script>
+                    document.getElementById('connection-site').addEventListener('change', (event) => {
+                        document.getElementById('connection-prefix').value = event.currentTarget.selectedOptions[0].dataset.cachePrefix;
+                    });
+                    </script>
+                <?php endif; ?>
                 <?php foreach ($data['connection'] as $key => $value): ?>
                     <div class="u-mb10"><label class="form-label" for="connection-<?= $escape($key) ?>"><?= $escape(ucfirst($key)) ?></label>
                         <input class="form-control" id="connection-<?= $escape($key) ?>" type="text" value="<?= $escape($value) ?>" readonly autocomplete="off"></div>
@@ -50,11 +73,9 @@ $panel = top_panel($headerOwner, $TAB);
             <div class="box-collapse-content">
                 <p class="u-mb10">Status: <strong><?= $site['suspended'] ? 'Suspended' : (!empty($site['enabled']) ? 'Enabled' : 'Disabled') ?></strong></p>
                 <?php if ($site['aliases']): ?><p class="u-mb10">Aliases: <?= $escape(implode(', ', $site['aliases'])) ?></p><?php endif; ?>
-                <?php if (isset($site['prefix'])): ?>
-                    <div class="u-mb20"><label class="form-label" for="prefix-<?= $escape($site['domain']) ?>">Cache prefix</label><input class="form-control" type="text" id="prefix-<?= $escape($site['domain']) ?>" value="<?= $escape($site['prefix']) ?>" readonly></div>
-                <?php endif; ?>
                 <?php if ($managed): ?>
                     <div class="toolbar-buttons">
+                        <form method="post" action="#connection-details"><?php $formFields('credentials', $site['domain']); ?><button type="submit" class="button button-secondary"><i class="fas fa-key icon-orange"></i>Show connection details</button></form>
                         <form method="post"><?php $formFields('test', $site['domain']); ?><button type="submit" class="button button-secondary"><i class="fas fa-plug icon-blue"></i>Test connection</button></form>
                         <form method="post"><?php $formFields('flush', $site['domain']); ?><button type="submit" class="button button-secondary"><i class="fas fa-trash icon-red"></i>Clear site cache</button></form>
                         <form method="post"><?php $formFields('toggle-site', $site['domain']); ?><input type="hidden" name="enabled" value="<?= empty($site['enabled']) ? '1' : '0' ?>"><button type="submit" class="button button-secondary"><?= empty($site['enabled']) ? 'Enable site' : 'Disable site' ?></button></form>
