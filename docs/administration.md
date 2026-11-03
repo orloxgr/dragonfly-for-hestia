@@ -4,7 +4,7 @@ An independent Hestia addon for one shared Dragonfly service, with personal
 credentials, native database isolation and a separate prefix for every website.
 Existing Hestia code and templates are not replaced.
 
-Version **0.6.0**.
+Version **0.7.0**.
 
 Source repository: [orloxgr/dragonfly-for-hestia](https://github.com/orloxgr/dragonfly-for-hestia).
 
@@ -111,7 +111,7 @@ old sessions.
 Database retirement is acknowledged only after a native snapshot completes, so
 an older persisted snapshot cannot repopulate a reassigned database on restart.
 The addon retains two snapshot sets created by its retirement/restore operations
-(`retirement_snapshot_keep`, configurable from 1 to 20). It tracks only files
+(`retirement_snapshot_keep`, any positive count). It tracks only files
 created or replaced by those operations; existing untracked snapshots and native
 shutdown/scheduled snapshots are retained. The initial retention implementation
 supports local native DFS snapshots with the default `dump-{timestamp}` naming.
@@ -257,3 +257,27 @@ header layout is unfamiliar, the script leaves the page alone; the direct
 `/plugins/dragonfly/` URL remains available.
 
 See [Hestia’s custom-script extension point](https://github.com/hestiacp/hestiacp/blob/1.10.5/web/js/custom_scripts/README.txt).
+
+## Native controls and completion (0.7.0)
+
+**Shared cache memory** accepts a positive MiB value, subject to actual native
+startup validity and rollback. **Worker threads** accepts `0` for native automatic
+selection or a positive count. Existing values survive addon updates; changing
+these controls restarts the shared service and verifies the resulting memory
+budget. Zero does not silently replace an existing explicit value on upgrade.
+
+Tenant ACLs permit native read/write/transaction data operations plus tested
+EVAL/EVALSHA and DUMP/RESTORE. Database and key-prefix enforcement applies to
+script commands too. Global administration, global flushes and unrestricted
+SCRIPT management remain unavailable. This expands application compatibility
+without granting a tenant control of the shared service.
+
+There are no addon request/file/RESP/output byte quotas or separate administrative
+work deadlines. Both bridge streams are drained completely. Authentication,
+private-file ownership, scope validation, service-failure checks and journalled
+rollback remain in place. Real native errors are not reported as success.
+Initial installation accepts `--port` with a valid loopback TCP port; restore
+checks native compatibility rather than an exact service-version string. The
+fresh-install package still has its pinned official URL and verified checksum.
+
+On the tested Dragonfly 2.0.2, per-subcommand SCRIPT ACL grants are unavailable. SCRIPT remains denied because granting the whole command would also permit shared SCRIPT FLUSH/KILL operations. Applications can use EVAL/EVALSHA with the verified DB/key restrictions.

@@ -61,7 +61,7 @@ def backup(value):
         state = json.loads((service.STORE / 'desired.json').read_text())
         service.validate(state, config)
         payload = {'settings': config, 'desired': state}
-        archive = {'schema': 1, 'addon': ID, 'service_version': config['version'],
+        archive = {'schema': 1, 'addon': ID, 'service_version': service.binary_version(),
                    'created_utc': datetime.datetime.now(datetime.timezone.utc).isoformat(),
                    'cache_data_included': False, 'payload': payload, 'sha256': digest(payload)}
         descriptor = os.open(destination, os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_NOFOLLOW, 0o600)
@@ -76,11 +76,10 @@ def read_backup(value):
     if source.is_symlink():
         raise ValueError('Backup must be a regular private file')
     info = source.stat()
-    if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or info.st_mode & 0o077 or info.st_size > 64 * 1024 * 1024:
-        raise ValueError('Backup must be root-owned, private and at most 64 MiB')
+    if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or info.st_mode & 0o077:
+        raise ValueError('Backup must be root-owned, private')
     archive = json.loads(source.read_text())
     if (archive.get('schema') != 1 or archive.get('addon') != ID or
-            archive.get('service_version') != '2.0.2' or
             archive.get('sha256') != digest(archive['payload'])):
         raise ValueError('Unsupported or damaged addon backup')
     payload = archive['payload']
@@ -109,7 +108,7 @@ def check_integration():
 
 def integration_files(source):
     subprocess.run(['python3', str(source / 'tools/install-integration.py')], check=True,
-                   capture_output=True, timeout=60)
+                   capture_output=True, timeout=None)
     DROPIN.parent.mkdir(parents=True, exist_ok=True)
     write(DROPIN, '# Managed by ' + ID + '\n[Service]\nEnvironmentFile=' + str(service.CONFIG / 'environment') + '\n', 0o644)
     write(CRON, '# Managed by ' + ID + '\nSHELL=/bin/sh\nPATH=/usr/sbin:/usr/bin:/sbin:/bin\n'
@@ -150,10 +149,7 @@ def restore(value, hestia, source):
     check_integration()
     if not Path('/usr/bin/dragonfly').is_file():
         raise ValueError('Install the supported Dragonfly package before restoring')
-    version = subprocess.check_output(['/usr/bin/dragonfly', '--version'], text=True)
-    version = re.sub(r'\x1b\[[0-9;]*m', '', version)
-    if not re.search(r'\bv2\.0\.2(?:-|\b)', version):
-        raise ValueError('Restore requires Dragonfly 2.0.2')
+    native_version = service.binary_version()
     # A restored Hestia account can have a different native directory birth time.
     # This explicit root operation rebinds archived identities by Hestia username.
     inventory = collect(hestia)
@@ -164,6 +160,7 @@ def restore(value, hestia, source):
     state = desired_state(archived, inventory, 'dragonfly')
     config = copy.deepcopy(payload['settings'])
     config['installed'] = True
+    config['version'] = native_version
     service.validate(state, config)
     installed = (service.CONFIG / 'settings.json').is_file() and service.settings().get('installed')
     if not installed and subprocess.run(['systemctl', 'is-active', '--quiet', 'dragonfly']).returncode == 0:
@@ -208,7 +205,7 @@ def restore(value, hestia, source):
             service.command('systemctl', 'daemon-reload')
             # systemd may garbage-collect a disabled inactive unit. In that
             # case reset-failed reports "not loaded"; start still loads it.
-            subprocess.run(['systemctl', 'reset-failed', 'dragonfly'], capture_output=True, timeout=30)
+            subprocess.run(['systemctl', 'reset-failed', 'dragonfly'], capture_output=True, timeout=None)
             service.command('systemctl', 'start', 'dragonfly'); service.wait_healthy(config)
             with service.admin(config) as connection:
                 # Restore is explicitly a cold-cache operation for this one
@@ -232,7 +229,7 @@ def restore(value, hestia, source):
                           gid if path.name == 'users.acl' else 0)
             service.command('systemctl', 'daemon-reload')
             if installed:
-                subprocess.run(['systemctl', 'reset-failed', 'dragonfly'], capture_output=True, timeout=30)
+                subprocess.run(['systemctl', 'reset-failed', 'dragonfly'], capture_output=True, timeout=None)
                 service.command('systemctl', 'start', 'dragonfly'); service.wait_healthy(old_config)
             else:
                 for path in (ROUTE, service.CONFIG):

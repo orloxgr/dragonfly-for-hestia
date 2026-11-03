@@ -17,13 +17,24 @@ from resp import Client, RedisError, text
 
 STORE = Path('/var/lib/dragonfly-for-hestia')
 CONFIG = Path('/etc/dragonfly-for-hestia')
-COMMANDS = ('ping echo get set setex psetex mget mset del unlink exists expire pexpire '
-            'ttl pttl scan info watch unwatch multi exec discard incr incrby decr '
-            'decrby select type strlen').split()
+# Native ACL categories track the service's supported data commands. Global
+# administration and cross-tenant access remain denied. EVAL/EVALSHA use
+# native command/key/DB ACL enforcement; global SCRIPT management stays denied.
+DATA_ACL = ('+@read', '+@write', '+@transaction', '-@admin', '-@dangerous',
+            '-@scripting', '+eval', '+evalsha', '+dump', '+restore', '+ping', '+echo', '+select', '+scan', '+info')
 
 
 class ApplyRolledBack(RuntimeError):
     pass
+
+
+def binary_version():
+    value = subprocess.check_output(['/usr/bin/dragonfly', '--version'], text=True)
+    value = re.sub(r'\x1b\[[0-9;]*m', '', value)
+    match = re.search(r'\bv(\d+[.]\d+[.]\d+)(?:-|\b)', value)
+    if not match:
+        raise ValueError('The native Dragonfly binary did not report its version')
+    return match[1]
 
 
 def settings():
@@ -52,23 +63,23 @@ def prefixes(owner, config):
 def validate(state, config):
     users, databases = set(), set()
     keep = config.get('retirement_snapshot_keep', 2)
-    if not isinstance(keep, int) or not 1 <= keep <= 20:
-        raise ValueError('retirement_snapshot_keep must be between 1 and 20')
-    if not re.fullmatch(r'[A-Za-z0-9_-]{20,256}', config['admin_password']):
+    if not isinstance(keep, int) or keep < 1:
+        raise ValueError('retirement_snapshot_keep must be positive')
+    if not re.fullmatch(r'[A-Za-z0-9_-]{20,}', config['admin_password']):
         raise ValueError('Unsupported administrator credential format')
     for owner in state['owners'].values():
-        if not re.fullmatch(r'[A-Za-z0-9_-]{1,100}', owner['username']) or owner['username'] == 'default':
+        if not re.fullmatch(r'[A-Za-z0-9_-]+', owner['username']) or owner['username'] == 'default':
             raise ValueError('Invalid tenant ACL identity')
         if owner['username'] in users or owner['database'] in databases:
             raise ValueError('Duplicate tenant assignment')
         users.add(owner['username']); databases.add(owner['database'])
-        if not isinstance(owner['database'], int) or not 0 <= owner['database'] < 65536:
+        if not isinstance(owner['database'], int) or owner['database'] < 0:
             raise ValueError('Invalid tenant database')
-        if not isinstance(owner['password'], str) or not 12 <= len(owner['password']) <= 256:
-            raise ValueError('Password must be between 12 and 256 characters')
+        if not isinstance(owner['password'], str) or not len(owner['password']) >= 12:
+            raise ValueError('Password must be at least 12 characters')
         values = [site['prefix'] for site in owner['sites'].values()]
         for value in values:
-            if not re.fullmatch(r'[a-zA-Z0-9_:/.-]{1,200}:', value):
+            if not re.fullmatch(r'[a-zA-Z0-9_:/.-]+:', value):
                 raise ValueError('Unsafe key prefix')
             if any(other != value and other.startswith(value) for other in values) or values.count(value) != 1:
                 raise ValueError('Overlapping site key prefixes')
@@ -80,7 +91,7 @@ def acl_words(owner, config, hashed=False):
                 else '>'+owner['password'])
     return [('on' if permitted else 'off'), 'resetpass', password, '$'+str(owner['database']),
             'resetkeys', *('~'+p+'*' for p in permitted), 'resetchannels', '-@all',
-            *('+'+cmd for cmd in COMMANDS if permitted)]
+             *(DATA_ACL if permitted else ())]
 
 
 def acl_text(state, config):
@@ -91,27 +102,29 @@ def acl_text(state, config):
 
 def environment(config, capacity):
     return '\n'.join(['DFLY_bind=127.0.0.1', 'DFLY_port='+str(config['port']),
-                      'DFLY_proactor_threads='+str(config['threads']),
+                      *(['DFLY_proactor_threads='+str(config['threads'])] if config.get('threads') else []),
                       'DFLY_maxmemory='+str(config['maxmemory']), 'DFLY_cache_mode=true',
                       'DFLY_dbnum='+str(capacity), 'DFLY_requirepass='+config['admin_password'],
                       'DFLY_aclfile='+str(CONFIG/'users.acl')])+'\n'
 
 
 def wait_healthy(config):
-    deadline = time.monotonic()+25
     while True:
         try:
             with admin(config) as connection:
                 if connection.command('PING') == 'PONG':
                     return
-        except (OSError, RedisError, ConnectionError):
-            if time.monotonic() > deadline:
+        except RedisError:
+            raise RuntimeError('The native Dragonfly administrator credential is not active') from None
+        except (OSError, ConnectionError):
+            state = subprocess.run(['systemctl', 'is-active', 'dragonfly'], capture_output=True, text=True)
+            if state.stdout.strip() in ('failed', 'inactive', 'deactivating', 'unknown'):
                 raise RuntimeError('Dragonfly did not become healthy') from None
             time.sleep(.25)
 
 
 def command(*args):
-    result = subprocess.run(args,capture_output=True,timeout=60)
+    result = subprocess.run(args,capture_output=True,timeout=None)
     if result.returncode:
         raise RuntimeError('Native service operation failed')
 
@@ -280,7 +293,7 @@ def cleanup_retired(state,config):
             for site in sites:
                 if site.get('cleaned'):
                     continue
-                if not re.fullmatch(r'[a-zA-Z0-9_:/.-]{1,200}:',site['prefix']):
+                if not re.fullmatch(r'[a-zA-Z0-9_:/.-]+:',site['prefix']):
                     raise ValueError('Unsafe retired key prefix')
                 removed += flush_site(owner,site,config)
                 site['cleaned'] = True
@@ -316,8 +329,8 @@ def request(hestia, owner_name, action, payload):
             raise ValueError('Domain is not owned by this account')
         if action == 'password':
             password = payload.get('password')
-            if not isinstance(password,str) or not 12 <= len(password) <= 256:
-                raise ValueError('Password must be between 12 and 256 characters')
+            if not isinstance(password,str) or not len(password) >= 12:
+                raise ValueError('Password must be at least 12 characters')
             owner['password'] = password
         elif action == 'toggle-account':
             if not isinstance(payload.get('enabled'),bool):

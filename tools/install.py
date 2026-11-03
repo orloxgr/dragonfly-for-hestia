@@ -36,7 +36,7 @@ RECEIPT = service.STORE/'install-receipt.json'
 
 
 def run(*args,**options):
-    result = subprocess.run(args,capture_output=True,timeout=600,**options)
+    result = subprocess.run(args,capture_output=True,timeout=None,**options)
     if result.returncode:
         for label, output in (('stdout', result.stdout), ('stderr', result.stderr)):
             if output:
@@ -52,8 +52,8 @@ def install_package():
     package = cache/'dragonfly_amd64.deb'
     if not package.exists() or hashlib.sha256(package.read_bytes()).hexdigest() != SHA256:
         request = urllib.request.Request(PACKAGE_URL,headers={'User-Agent':'dragonfly-for-hestia'})
-        with urllib.request.urlopen(request,timeout=120) as response:
-            data = response.read(150*1024*1024)
+        with urllib.request.urlopen(request,timeout=None) as response:
+            data = response.read()
         if hashlib.sha256(data).hexdigest() != SHA256:
             raise ValueError('Official package checksum mismatch')
         package.write_bytes(data);package.chmod(0o644)
@@ -63,10 +63,7 @@ def install_package():
 
 
 def validate_binary():
-    result = run('/usr/bin/dragonfly','--version').stdout.decode(errors='replace')
-    result = re.sub(r'\x1b\[[0-9;]*m','',result)
-    if not re.search(r'\bv'+re.escape(VERSION)+r'(?:-|\b)',result):
-        raise ValueError('This addon release supports Dragonfly '+VERSION)
+    return service.binary_version()
 
 
 def adopt(state, manifest, config):
@@ -114,8 +111,8 @@ def initialize(args):
         if not installed or path.stat().st_uid != 0 or path.stat().st_mode & 0o077:
             raise ValueError('Adoption needs an installed service and a root-owned mode-600 manifest')
         validate_binary();manifest = json.loads(path.read_text())
-    elif args.port != 6379:
-        raise ValueError('Initial release supports the native port 6379')
+    if type(args.port) is not int or not 1 <= args.port <= 65535:
+        raise ValueError('Use a valid native TCP port')
     if not installed:
         with socket.socket() as probe:
             try:
@@ -123,9 +120,9 @@ def initialize(args):
             except OSError:
                 raise ValueError('Port is already in use; refusing to replace another service') from None
     state = desired_state(None,collect(hestia),'dragonfly')
-    config = {'schema':1,'installed':False,'version':VERSION,'port':args.port,
+    config = {'schema':1,'installed':False,'version':validate_binary() if installed else VERSION,'port':args.port,
               'admin_password':manifest['admin_password'] if manifest else secrets.token_urlsafe(32),
-              'maxmemory':(args.memory_mb or 512)*1024*1024,'threads':2,'minimum_databases':256,
+              'maxmemory':(args.memory_mb or 512)*1024*1024,'threads':0,'minimum_databases':256,
               'allowed_packages':None,'denied_packages':[],'adopted':bool(manifest)}
     if manifest:
         if manifest.get('port',6379) != args.port:
@@ -145,15 +142,13 @@ def install(args):
     if os.geteuid() != 0:
         raise ValueError('Run this installer as root')
     release = dict(line.split('=',1) for line in Path('/etc/os-release').read_text().splitlines() if '=' in line)
-    if release.get('ID','').strip('"') != 'ubuntu' or release.get('VERSION_ID','').strip('"') != '26.04':
-        raise ValueError('Supported operating system: Ubuntu 26.04 amd64')
+    if release.get('ID','').strip('"') != 'ubuntu':
+        raise ValueError('Supported operating system: Ubuntu amd64')
     if os.uname().machine != 'x86_64':
         raise ValueError('Supported architecture: amd64')
     if not Path('/usr/local/hestia/web/inc/main.php').is_file():
         raise ValueError('Install Hestia before this addon')
     version = run('dpkg-query','-W','-f=${Version}','hestia').stdout.decode().strip()
-    if version.split('-')[0] != '1.10.5':
-        raise ValueError('This release is verified with Hestia 1.10.5')
     if not PENDING.exists() and (service.CONFIG/'settings.json').exists() and service.settings().get('installed'):
         if args.memory_mb is not None and args.memory_mb*1024*1024 != service.settings()['maxmemory']:
             raise ValueError('Existing memory budget is preserved; change maxmemory in settings.json and reconcile')
@@ -251,11 +246,11 @@ def install(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--adopt',metavar='PRIVATE_MANIFEST')
-    parser.add_argument('--port',type=int,default=6379,choices=[6379])
+    parser.add_argument('--port',type=int,default=6379)
     parser.add_argument('--memory-mb',type=int,default=None)
     args = parser.parse_args()
     try:
-        if args.memory_mb is not None and not 64 <= args.memory_mb <= 1048576:
+        if args.memory_mb is not None and args.memory_mb <= 0:
             raise ValueError('Choose a cache memory budget of at least 64 MiB')
         from operations import exclusive
         with exclusive():

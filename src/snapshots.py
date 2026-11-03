@@ -21,7 +21,7 @@ def local_files(directory, pattern):
 
 def durable_save(config, store):
     """Caller holds the addon operation/registry lock. SAVE failure never retires a DB."""
-    with Client(config['admin_password'], port=config['port'], timeout=120) as connection:
+    with Client(config['admin_password'], port=config['port'], timeout=None) as connection:
         directory = Path(text(connection.command('CONFIG', 'GET', 'dir')[1]))
         pattern = text(connection.command('CONFIG', 'GET', 'dbfilename')[1])
         before = local_files(directory, pattern)
@@ -38,8 +38,8 @@ def durable_save(config, store):
     if changed:
         groups.append({'directory': str(directory), 'files': changed})
     keep = config.get('retirement_snapshot_keep', 2)
-    if not isinstance(keep, int) or not 1 <= keep <= 20:
-        raise ValueError('retirement_snapshot_keep must be between 1 and 20')
+    if not isinstance(keep, int) or keep < 1:
+        raise ValueError('retirement_snapshot_keep must be positive')
     retained, obsolete = groups[-keep:], groups[:-keep]
     # Record retained groups before unlink. A crash can leave an extra old file,
     # never a ledger entry that deletes a later unrelated filename.

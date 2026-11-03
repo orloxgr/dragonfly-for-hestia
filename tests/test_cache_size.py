@@ -44,7 +44,7 @@ class CacheSize(unittest.TestCase):
                 yield root,config,state,command
 
     def test_invalid_size_is_rejected_before_native_operations(self):
-        for value in (None,True,'2048',63,1048577,128.5,'64; reboot'):
+        for value in (None,True,'2048',0,-1,128.5,'64; reboot'):
             with patch.object(service,'recover_pending') as recover:
                 with self.assertRaises(ValueError):cache_size.resize(value)
                 recover.assert_not_called()
@@ -95,13 +95,13 @@ class CacheSize(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'differs from the saved'):cache_size.resize(512)
             command.assert_not_called()
 
-    def test_native_thread_minimum_is_checked_before_writing_or_restarting(self):
+    def test_native_memory_validity_is_decided_by_service_without_an_addon_floor(self):
         with self.installation() as (root,config,state,command):
             (root/'settings.json').write_text(json.dumps({**config,'threads':2}))
-            before=(root/'environment').read_bytes()
-            with self.assertRaisesRegex(ValueError,'per configured worker'):cache_size.resize(256)
-            self.assertEqual((root/'environment').read_bytes(),before)
-            self.assertFalse((root/cache_size.JOURNAL).exists());command.assert_not_called()
+            result,restarted=cache_size.resize(128)
+            self.assertTrue(restarted)
+            self.assertEqual(result['maxmemory'],128*cache_size.MIB)
+            self.assertFalse((root/cache_size.JOURNAL).exists())
 
     def test_admin_form_reports_budget_without_account_mutations_or_stats_polling(self):
         with self.installation() as (root,config,state,command),patch.object(service,'reconcile') as reconcile:

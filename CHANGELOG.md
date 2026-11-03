@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.0 · 2026-11-04
+
+- Replace the narrow 29-command tenant allowlist with native data/transaction categories and tested EVAL/EVALSHA and DUMP/RESTORE support. Native DB/key-prefix ACLs remain mandatory; global administration, destructive global flushes and unrestricted SCRIPT management stay denied.
+- Add administrator worker-thread control: zero selects native automatic sizing; positive values choose a native worker count. Existing thread and memory choices are preserved during upgrades.
+- Remove addon memory-size floors/ceilings, per-thread budget checks, RESP/request/file/output ceilings, snapshot-count ceiling and administrative/download deadlines. Actual native validity and journalled rollback remain authoritative.
+- Allow a valid loopback TCP port during initial installation/adoption and native-compatible backup restores without an exact service-version pin. Official fresh-install package checksum verification remains.
+- Open the normal panel directly after native session checks, and drain full bridge stdout/stderr concurrently to avoid truncated JSON and pipe deadlocks.
+
 ## 0.6.0
 
 - Add an administrator-only shared memory limit in MiB, with hover explanations,

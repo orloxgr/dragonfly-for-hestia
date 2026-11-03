@@ -59,7 +59,7 @@ $panel = top_panel($headerOwner, $TAB);
             <summary class="box-collapse-header"><i class="fas fa-key u-mr10"></i>Change Dragonfly password</summary>
             <div class="box-collapse-content"><form method="post">
                 <?php $formFields('password'); ?>
-                <div class="u-mb20"><label class="form-label" for="new-password">New password</label><input class="form-control" type="password" id="new-password" name="password" minlength="12" maxlength="256" required autocomplete="new-password"></div>
+                <div class="u-mb20"><label class="form-label" for="new-password">New password</label><input class="form-control" type="password" id="new-password" name="password" minlength="12" required autocomplete="new-password"></div>
                 <button class="button" type="submit"><i class="fas fa-floppy-disk icon-purple"></i>Change password</button>
             </form></div>
         </details>

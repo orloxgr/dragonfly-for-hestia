@@ -16,7 +16,9 @@ $profiles = ['general' => 'General', 'wordpress' => 'WordPress', 'woocommerce' =
         <form method="post">
             <?php $formFields('admin-memory-size'); ?>
             <label class="form-label" for="memory-mb">Cache memory limit (MiB)</label>
-            <input class="form-control u-mb10" id="memory-mb" name="memory_mb" type="number" min="<?= $escape($data['memory_min_mb'] ?? 256) ?>" max="1048576" step="1" value="<?= $escape($data['memory_budget_mb'] ?? '') ?>" required title="One shared limit for all accounts and websites. 2048 MiB is 2 GiB. Dragonfly needs at least 256 MiB per configured worker thread. Total process RAM also includes runtime overhead. Updates preserve the saved limit.">
+            <input class="form-control u-mb10" id="memory-mb" name="memory_mb" type="number" min="<?= $escape($data['memory_min_mb'] ?? 1) ?>" step="1" value="<?= $escape($data['memory_budget_mb'] ?? '') ?>" required title="One shared limit for all accounts and websites. 2048 MiB is 2 GiB. Total process RAM also includes runtime overhead. Updates preserve the saved limit.">
+            <label class="form-label" for="dragonfly-threads">Worker threads (0 = native automatic)</label>
+            <input class="form-control u-mb10" id="dragonfly-threads" name="threads" type="number" min="0" step="1" value="<?= $escape($data['threads'] ?? 0) ?>" required title="Choose the native automatic thread count with zero, or an explicit positive count. Existing settings are preserved until you apply this form. Changing threads restarts the shared service.">
             <p class="u-mb10">Changing the limit restarts Dragonfly for all accounts. Connections briefly disconnect and the cache may need to warm again.</p>
             <button class="button u-mb20" type="submit" title="Save the server-wide memory limit and restart the native Dragonfly service. Credentials, database assignments and site prefixes are preserved. An unchanged value does not restart the service.">Apply size and restart Dragonfly</button>
         </form>

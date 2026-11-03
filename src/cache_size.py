@@ -13,8 +13,8 @@ MIB = 1024 * 1024
 
 
 def validate(value):
-    if type(value) is not int or not 256 <= value <= 1048576:
-        raise ValueError('Cache size must be 256–1048576 MiB')
+    if type(value) is not int or not value > 0:
+        raise ValueError('Cache size must be a positive number of MiB')
     return value
 
 
@@ -47,15 +47,16 @@ def recover():
     return True
 
 
-def resize(value):
+def resize(value, threads=None):
     validate(value)
     # The panel bridge and installer already hold the addon operation lock.
     service.recover_pending()
     config = service.effective_config()
-    if value < max(1, config['threads']) * 256:
-        raise ValueError('Dragonfly needs at least 256 MiB per configured worker thread')
+    chosen_threads = config.get('threads', 0) if threads is None else threads
+    if type(chosen_threads) is not int or chosen_threads < 0:
+        raise ValueError('Threads must be zero for native automatic selection or a positive integer')
     budget = value * MIB
-    if config['maxmemory'] == budget:
+    if config['maxmemory'] == budget and config.get('threads', 0) == chosen_threads:
         return config, False
     for path in paths():
         info = path.lstat()
@@ -65,8 +66,13 @@ def resize(value):
     old = re.findall(r'^DFLY_maxmemory=(\d+)$', environment, re.M)
     if old != [str(config['maxmemory'])]:
         raise ValueError('The native startup memory limit differs from the saved configuration')
-    updated = dict(config, maxmemory=budget)
+    updated = dict(config, maxmemory=budget, threads=chosen_threads)
     candidate = re.sub(r'^DFLY_maxmemory=\d+$', 'DFLY_maxmemory=' + str(budget), environment, flags=re.M)
+    candidate = re.sub(r'^DFLY_proactor_threads=\d+\n?', '', candidate, flags=re.M)
+    if chosen_threads:
+        # Keep every unrelated native environment choice byte-for-byte.
+        candidate = candidate.replace('DFLY_port=' + str(config['port']) + '\n',
+            'DFLY_port=' + str(config['port']) + '\nDFLY_proactor_threads=' + str(chosen_threads) + '\n', 1)
     transaction.begin(service.STORE, paths(), filename=JOURNAL)
     try:
         write(service.CONFIG / 'environment', candidate)
