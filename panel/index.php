@@ -77,10 +77,13 @@ if (isset($_POST['enabled'])) {
     $request['enabled'] = $_POST['enabled'] === '1';
 }
 if (str_starts_with((string)$action, 'admin-')) {
-    if (!$isAdmin || !in_array($action, ['admin-inventory', 'admin-bulk'], true)) {
+    if (!$isAdmin || !in_array($action, ['admin-inventory', 'admin-bulk', 'admin-memory-size'], true)) {
         $respond(403, ['ok' => false, 'error' => 'Administrator access required.']);
     }
     $adminOverview = true;
+    if ($action === 'admin-memory-size') {
+        $request['memory_mb'] = filter_var($_POST['memory_mb'] ?? '', FILTER_VALIDATE_INT);
+    }
     $request['scope'] = $_POST['scope'] ?? null;
     $request['operation'] = $_POST['operation'] ?? null;
     $request['profile'] = $_POST['profile'] ?? null;
@@ -123,6 +126,9 @@ if ($code !== 0 || !is_array($data) || empty($data['ok'])) {
         $pageError = $action === 'admin-bulk'
             ? 'The bulk change could not be applied. Check the selection and that the service is running.'
             : 'Could not load accounts. Check that the service is installed and running.';
+        if ($action === 'admin-memory-size') {
+            $pageError = 'The memory size could not be applied. Check the size and native Dragonfly service; an interrupted change is recovered on the next request.';
+        }
     }
     [$status, $current] = $bridge(['actor' => $actor, 'owner' => $owner, 'action' => $adminOverview ? 'admin-inventory' : 'inventory']);
     $data = $status === 0 && is_array($current) && !empty($current['ok']) ? $current : ['sites' => []];

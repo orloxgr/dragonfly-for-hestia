@@ -71,15 +71,27 @@ def overview(state, config, kind):
         accounts.append({'owner': name, 'package': owner['package'], 'enabled': owner['enabled'],
                          'suspended': owner['suspended'], 'allowed': allowed, 'sites': sites})
     return {'ok': True, 'admin': True, 'service_installed': True, 'accounts': accounts,
+            'memory_budget_mb': config.get('maxmemory', 0) // (1024 * 1024),
+            'memory_min_mb': max(1, config.get('threads', 1)) * 256,
             'total_accounts': len(accounts), 'total_sites': sum(len(row['sites']) for row in accounts)}
 
 
 def request(hestia, action, payload, kind):
-    from service import reconcile
+    import service
+    if action not in ('admin-inventory', 'admin-bulk', 'admin-memory-size'):
+        raise ValueError('Invalid administrator action')
+    if action == 'admin-memory-size':
+        import json
+        from cache_size import resize
+        config, restarted = resize(payload.get('memory_mb'))
+        state = json.loads((service.STORE / 'applied.json').read_text())
+        result = overview(state, config, kind)
+        result.update(memory_size_saved=True, service_restarted=restarted)
+        return result
     changed = {}
     def mutation(state, config):
         changed.update(mutate(state, payload, kind))
-    state, config, _ = reconcile(hestia, mutation if action == 'admin-bulk' else None)
+    state, config, _ = service.reconcile(hestia, mutation if action == 'admin-bulk' else None)
     result = overview(state, config, kind)
     if changed:
         result['changed'] = changed

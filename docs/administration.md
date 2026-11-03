@@ -4,7 +4,7 @@ An independent Hestia addon for one shared Dragonfly service, with personal
 credentials, native database isolation and a separate prefix for every website.
 Existing Hestia code and templates are not replaced.
 
-Version **0.5.2**.
+Version **0.6.0**.
 
 Source repository: [orloxgr/dragonfly-for-hestia](https://github.com/orloxgr/dragonfly-for-hestia).
 
@@ -21,8 +21,7 @@ cd /usr/local/src/dragonfly-for-hestia
 sudo python3 tools/install.py --memory-mb 2048
 ```
 
-Use GitHub credentials with repository access when cloning or updating a private
-repository. Keep `/usr/local/src/dragonfly-for-hestia` for future updates and recovery.
+Keep `/usr/local/src/dragonfly-for-hestia` for future updates and recovery.
 
 When Dragonfly is absent, the installer downloads the official pinned `.deb`,
 verifies its SHA256 and installs it with APT. Authentication and loopback binding
@@ -48,16 +47,17 @@ The memory argument sets the initial **server-wide** cache budget, shared by all
 hosting accounts; it is not a per-user allowance. Existing budgets are preserved
 when rerunning the installer.
 
-To change the shared cache budget later, edit `maxmemory` (bytes) in
-`/etc/dragonfly-for-hestia/settings.json`, then run:
-
-```sh
-sudo /usr/local/hestia/bin/v-dragonfly-hestia reconcile
-```
-
-For example, `2147483648` sets a 2 GiB cache budget. Applying this change restarts
-the shared native service, so active connections briefly disconnect. Process
-memory also includes runtime overhead outside the cache budget.
+To change the shared cache budget later, open **Plugins → Dragonfly** as an
+administrator. Enter the size in MiB under **Shared cache memory**, then click
+**Apply size and restart Dragonfly**. `2048` sets a 2 GiB cache budget.
+The panel updates both durable settings and native startup configuration and
+verifies the running limit with `CONFIG GET maxmemory`. Existing credentials,
+database assignments and site prefixes are preserved. A failed or interrupted
+change restores the previous settings through the private resize journal.
+An unchanged value does not restart the service. A changed value restarts the
+shared native service, so active connections briefly disconnect and the cache
+may need to warm again. Process memory also includes runtime overhead outside
+the cache budget. Ordinary accounts cannot change this server-wide setting.
 
 ## Open the interface
 

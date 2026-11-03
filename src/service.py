@@ -27,6 +27,8 @@ class ApplyRolledBack(RuntimeError):
 
 
 def settings():
+    from cache_size import recover
+    recover()
     return json.loads((CONFIG/'settings.json').read_text())
 
 

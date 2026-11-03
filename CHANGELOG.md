@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.0
+
+- Add an administrator-only shared memory limit in MiB, with hover explanations,
+  native restart and verification of the effective Dragonfly limit.
+- Preserve credentials, database assignments and site prefixes. Keep a private
+  undo record for failed or interrupted size changes; unchanged sizes do not restart.
+- Update installation documentation and remove private-clone login instructions.
+
 ## 0.5.2
 
 - Show the website selector and its cache prefix together with all connection details.

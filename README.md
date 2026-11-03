@@ -1,7 +1,7 @@
 # Dragonfly for Hestia
 
 One shared Dragonfly service, separate credentials for each Hestia user and a
-separate cache prefix for each site. Version **0.5.2** Ξ’Β· GPL-3.0-or-later.
+separate cache prefix for each site. Version **0.6.0** · GPL-3.0-or-later.
 
 ## Quick start
 
@@ -42,6 +42,12 @@ Application settings are managed separately.
 The **2 GiB budget is shared by all users**, not allocated per user. It is a cache
 limit, not a reservation or a cap on total process RAM. Hestia's existing code and
 templates are not replaced.
+
+To change it later, open **Plugins → Dragonfly** as administrator. Under
+**Shared cache memory**, enter the limit in MiB, then click **Apply size and
+restart Dragonfly**. For example, `2048` is 2 GiB. This restarts the shared
+service for all accounts; credentials, database assignments and prefixes stay
+the same. An unchanged value does not restart the service.
 
 While this repository is private, cloning requires your GitHub username and a
 token with repository access at the password prompt, not your GitHub password.
