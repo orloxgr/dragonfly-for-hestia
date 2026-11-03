@@ -9,17 +9,37 @@ Requires **Ubuntu 26.04 amd64 with Hestia 1.10.5 already installed**.
 Run commands over SSH as an administrator. The installer also installs Dragonfly
 **2.0.2**; do not install the service separately.
 
-1. **Clone.**
+1. **Get the code. Choose one command:**
+
+   For a **new installation**, clone the repository:
 
    ```sh
    sudo git clone https://github.com/orloxgr/dragonfly-for-hestia.git /usr/local/src/dragonfly-for-hestia
    ```
 
-2. **Install with a 2 GiB cache budget.**
+   To **update an existing checkout**, pull instead:
+
+   ```sh
+   sudo git -C /usr/local/src/dragonfly-for-hestia pull --ff-only
+   ```
+
+   Wait for Git to finish successfully before continuing.
+
+2. **Install or apply the update.**
+
+   For a **new installation** with a 2 GiB cache budget:
 
    ```sh
    sudo python3 /usr/local/src/dragonfly-for-hestia/tools/install.py --memory-mb 2048
    ```
+
+   For an **update**, retain the existing memory budget:
+
+   ```sh
+   sudo python3 /usr/local/src/dragonfly-for-hestia/tools/install.py
+   ```
+
+   Pulling the code alone does not apply the update; run the installer too.
 
 3. **Check that Dragonfly is running.** The output should be `active`.
 
@@ -54,8 +74,15 @@ token with repository access at the password prompt, not your GitHub password.
 
 ## Update
 
+Run these commands separately. First, download the latest code:
+
 ```sh
 sudo git -C /usr/local/src/dragonfly-for-hestia pull --ff-only
+```
+
+After Git finishes successfully, apply the update:
+
+```sh
 sudo python3 /usr/local/src/dragonfly-for-hestia/tools/install.py
 ```
 
