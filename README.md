@@ -1,7 +1,7 @@
 # Dragonfly for Hestia
 
 One shared Dragonfly service, separate credentials for each Hestia user and a
-separate cache prefix for each site. Version **0.7.0** · GPL-3.0-or-later.
+separate cache prefix for each site. Version **0.7.1** · GPL-3.0-or-later.
 
 ## Quick start
 
@@ -93,3 +93,5 @@ For changing RAM, backup, restore, removal or importing an existing Dragonfly,
 see the [administration reference](docs/administration.md).
 
 See the 0.7.0 [changelog](CHANGELOG.md) for completion, native controls and compatibility changes. Existing service budgets and credentials are preserved on update.
+
+Version 0.7.1 waits through native snapshot loading during resize/recovery, explicitly writes zero for automatic threads, and reports controlled recovery errors in the administrator panel. Updating also completes any pending resize recovery through the existing installer.

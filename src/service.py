@@ -102,7 +102,7 @@ def acl_text(state, config):
 
 def environment(config, capacity):
     return '\n'.join(['DFLY_bind=127.0.0.1', 'DFLY_port='+str(config['port']),
-                      *(['DFLY_proactor_threads='+str(config['threads'])] if config.get('threads') else []),
+                      'DFLY_proactor_threads='+str(config.get('threads', 0)),
                       'DFLY_maxmemory='+str(config['maxmemory']), 'DFLY_cache_mode=true',
                       'DFLY_dbnum='+str(capacity), 'DFLY_requirepass='+config['admin_password'],
                       'DFLY_aclfile='+str(CONFIG/'users.acl')])+'\n'
@@ -114,13 +114,20 @@ def wait_healthy(config):
             with admin(config) as connection:
                 if connection.command('PING') == 'PONG':
                     return
-        except RedisError:
-            raise RuntimeError('The native Dragonfly administrator credential is not active') from None
+                raise RuntimeError('The native Dragonfly health reply was not PONG')
+        except RedisError as error:
+            if error.code not in ('LOADING', 'BUSY', 'TRYAGAIN'):
+                if error.code in ('WRONGPASS', 'NOAUTH'):
+                    raise RuntimeError('The native Dragonfly administrator credential is not active') from None
+                raise RuntimeError('The native Dragonfly health check was rejected') from None
         except (OSError, ConnectionError):
-            state = subprocess.run(['systemctl', 'is-active', 'dragonfly'], capture_output=True, text=True)
-            if state.stdout.strip() in ('failed', 'inactive', 'deactivating', 'unknown'):
-                raise RuntimeError('Dragonfly did not become healthy') from None
-            time.sleep(.25)
+            pass
+        # A listener can accept connections before snapshot loading completes.
+        # Wait for readiness without treating LOADING as bad authentication.
+        state = subprocess.run(['systemctl', 'is-active', 'dragonfly'], capture_output=True, text=True)
+        if state.stdout.strip() in ('failed', 'inactive', 'deactivating', 'unknown'):
+            raise RuntimeError('Dragonfly did not become healthy') from None
+        time.sleep(.25)
 
 
 def command(*args):

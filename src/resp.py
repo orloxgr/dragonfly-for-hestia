@@ -3,7 +3,9 @@ import socket
 
 
 class RedisError(RuntimeError):
-    pass
+    def __init__(self, message='Dragonfly rejected the operation', code=None):
+        super().__init__(message)
+        self.code = code
 
 
 def text(value):
@@ -39,7 +41,9 @@ class Client:
             return value.decode()
         if kind == b'-':
             # Do not put server-controlled strings in an externally visible error.
-            raise RedisError('Dragonfly rejected the operation')
+            token = value.split(b' ', 1)[0]
+            code = token.decode('ascii') if token in (b'LOADING', b'BUSY', b'TRYAGAIN', b'WRONGPASS', b'NOAUTH', b'NOPERM', b'ERR') else None
+            raise RedisError(code=code)
         if kind == b':':
             return int(value)
         if kind == b'$':

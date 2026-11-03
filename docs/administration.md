@@ -4,7 +4,7 @@ An independent Hestia addon for one shared Dragonfly service, with personal
 credentials, native database isolation and a separate prefix for every website.
 Existing Hestia code and templates are not replaced.
 
-Version **0.7.0**.
+Version **0.7.1**.
 
 Source repository: [orloxgr/dragonfly-for-hestia](https://github.com/orloxgr/dragonfly-for-hestia).
 
@@ -281,3 +281,7 @@ checks native compatibility rather than an exact service-version string. The
 fresh-install package still has its pinned official URL and verified checksum.
 
 On the tested Dragonfly 2.0.2, per-subcommand SCRIPT ACL grants are unavailable. SCRIPT remains denied because granting the whole command would also permit shared SCRIPT FLUSH/KILL operations. Applications can use EVAL/EVALSHA with the verified DB/key restrictions.
+
+### Startup readiness and resize recovery (0.7.1)
+
+A native listener may accept connections while a snapshot is still loading. LOADING, BUSY and TRYAGAIN responses are readiness states: the addon waits for authenticated PONG and verifies the memory budget. Actual credential errors and stopped/failed services still fail. Zero threads is written explicitly in the environment, so inherited defaults cannot replace the automatic choice. Failed changes retain journalled recovery, and administrator errors distinguish restored settings from pending recovery without disclosing native replies or credentials.

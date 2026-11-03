@@ -7,6 +7,7 @@ from files import write, write_json
 from resp import text
 import service
 import transaction
+from errors import OperationError
 
 JOURNAL = 'resize.json'
 MIB = 1024 * 1024
@@ -42,7 +43,10 @@ def recover():
         return False
     transaction.restore_files(record)
     config = json.loads((service.CONFIG / 'settings.json').read_text())
-    start(config)
+    try:
+        start(config)
+    except Exception:
+        raise OperationError('resize_recovery_pending', 'Recovery of the previous Dragonfly memory and thread settings is pending. The undo record has been retained.') from None
     transaction.finish(service.STORE, filename=JOURNAL)
     return True
 
@@ -69,9 +73,10 @@ def resize(value, threads=None):
     updated = dict(config, maxmemory=budget, threads=chosen_threads)
     candidate = re.sub(r'^DFLY_maxmemory=\d+$', 'DFLY_maxmemory=' + str(budget), environment, flags=re.M)
     candidate = re.sub(r'^DFLY_proactor_threads=\d+\n?', '', candidate, flags=re.M)
-    if chosen_threads:
-        # Keep every unrelated native environment choice byte-for-byte.
-        candidate = candidate.replace('DFLY_port=' + str(config['port']) + '\n',
+    if "DFLY_port=" + str(config['port']) + "\n" not in candidate:
+        raise ValueError('The native startup port differs from the saved configuration')
+    # Explicit zero overrides inherited environment defaults and means native auto.
+    candidate = candidate.replace('DFLY_port=' + str(config['port']) + '\n',
             'DFLY_port=' + str(config['port']) + '\nDFLY_proactor_threads=' + str(chosen_threads) + '\n', 1)
     transaction.begin(service.STORE, paths(), filename=JOURNAL)
     try:
@@ -82,7 +87,7 @@ def resize(value, threads=None):
         try:
             recover()
         except Exception:
-            raise RuntimeError('Dragonfly resize failed; recovery is pending. Check the native service.') from None
-        raise RuntimeError('Dragonfly resize failed; the previous memory limit was restored.') from None
+            raise OperationError('resize_recovery_pending', 'Dragonfly settings could not be applied and recovery is pending. The saved previous settings are retained.') from None
+        raise OperationError('resize_restored', 'Dragonfly settings could not be applied. The previous memory limit was restored, together with its worker-thread setting.') from None
     transaction.finish(service.STORE, filename=JOURNAL)
     return updated, True

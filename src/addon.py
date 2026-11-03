@@ -11,6 +11,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT/'src'))
 META = json.loads((ROOT / 'addon.json').read_text())
 HESTIA = Path('/usr/local/hestia')
+from errors import OperationError
+
 ENV = {'PATH': '/usr/sbin:/usr/bin:/sbin:/bin', 'HESTIA': str(HESTIA), 'LANG': 'C.UTF-8'}
 
 
@@ -111,6 +113,9 @@ def locked_main():
             raise RequestError('Expected a JSON object.')
         result = dispatch(request)
         code = 0
+    except OperationError as error:
+        result = {'ok': False, 'error': str(error), 'error_code': error.code}
+        code = 1
     except (RequestError, ValueError, KeyError, TypeError, RuntimeError, subprocess.SubprocessError, OSError):
         # Never echo raw CLI output, credentials or a caller-controlled value.
         result = {'ok': False, 'error': 'Request refused or Hestia unavailable.'}

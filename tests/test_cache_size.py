@@ -12,7 +12,7 @@ import sys
 import tempfile
 import time
 import unittest
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'src'))
 import addon
@@ -21,7 +21,7 @@ import cache_size
 import service
 import transaction
 from registry import desired_state
-from resp import Client
+from resp import Client, RedisError
 
 
 class CacheSize(unittest.TestCase):
@@ -103,6 +103,27 @@ class CacheSize(unittest.TestCase):
             self.assertEqual(result['maxmemory'],128*cache_size.MIB)
             self.assertFalse((root/cache_size.JOURNAL).exists())
 
+    def test_zero_threads_is_written_explicitly_and_does_not_change_other_settings(self):
+        with self.installation() as (root,config,state,command):
+            after,restarted=cache_size.resize(2048,0)
+            self.assertTrue(restarted)
+            self.assertEqual(after['threads'],0)
+            self.assertIn('DFLY_proactor_threads=0\n',(root/'environment').read_text())
+            self.assertEqual((root/'users.acl').read_text(),service.acl_text(state,config))
+
+    def test_loading_and_busy_are_readiness_states_not_bad_passwords(self):
+        from types import SimpleNamespace
+        ready=MagicMock();ready.__enter__.return_value.command.return_value='PONG'
+        with patch.object(service,'admin',side_effect=[RedisError(code='LOADING'), RedisError(code='BUSY'), ready]) as admin, \
+             patch.object(service.subprocess,'run',return_value=SimpleNamespace(stdout='active')),patch.object(service.time,'sleep') as pause:
+            service.wait_healthy({})
+            self.assertEqual(pause.call_count,2)
+
+    def test_bad_credentials_still_fail_immediately_and_never_report_healthy(self):
+        with patch.object(service,'admin',side_effect=RedisError(code='WRONGPASS')),patch.object(service.time,'sleep') as pause:
+            with self.assertRaisesRegex(RuntimeError,'credential'):service.wait_healthy({})
+            pause.assert_not_called()
+
     def test_admin_form_reports_budget_without_account_mutations_or_stats_polling(self):
         with self.installation() as (root,config,state,command),patch.object(service,'reconcile') as reconcile:
             result=administration.request(None,'admin-memory-size',{'memory_mb':512},'dragonfly')
@@ -147,7 +168,6 @@ class NativeBudget(unittest.TestCase):
                     env={**os.environ,'DFLY_dir':str(root),'DFLY_logtostderr':'true'}
                     env.update(line.split('=',1) for line in (root/'environment').read_text().splitlines())
                     process=subprocess.Popen([os.environ['HDN_TEST_DRAGONFLY']],env=env,cwd=root,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
-                    time.sleep(.15)
                     if process.poll() is not None:
                         output=process.communicate()[1].decode(errors='replace')
                         for value in (config['admin_password'],owner['password']):output=output.replace(value,'[redacted]')
@@ -155,6 +175,10 @@ class NativeBudget(unittest.TestCase):
                 try:
                     restart('systemctl','restart','dragonfly');service.wait_healthy(config);cache_size.check_budget(config)
                     with Client(owner['password'],owner['username'],port) as connection:self.assertEqual(connection.command('PING'),'PONG')
+                    payload=b'native-cache-proof-'+os.urandom(65536)
+                    with Client(config['admin_password'],port=port) as connection:
+                        connection.command('SELECT',owner['database'])
+                        for number in range(128):connection.command('SET',owner['sites']['example.test']['prefix']+'snapshot-'+str(number),payload)
                     before=(root/'users.acl').read_bytes()
                     with patch.object(service,'command',side_effect=restart):
                         updated,restarted=cache_size.resize(512)
@@ -162,4 +186,15 @@ class NativeBudget(unittest.TestCase):
                     with Client(owner['password'],owner['username'],port) as connection:self.assertEqual(connection.command('PING'),'PONG')
                     self.assertEqual((root/'users.acl').read_bytes(),before)
                     self.assertEqual(updated['admin_password'],config['admin_password'])
+                    for threads in (2,0):
+                        with patch.object(service,'command',side_effect=restart):
+                            updated,restarted=cache_size.resize(2048,threads)
+                        self.assertTrue(restarted)
+                        self.assertEqual(updated['threads'],threads)
+                        self.assertIn('DFLY_proactor_threads='+str(threads)+'\n',(root/'environment').read_text())
+                        cache_size.check_budget(updated)
+                        with Client(owner['password'],owner['username'],port) as connection:
+                            connection.command('SELECT',owner['database'])
+                            self.assertEqual(connection.command('GET',owner['sites']['example.test']['prefix']+'snapshot-127'),payload)
+                        self.assertFalse((root/cache_size.JOURNAL).exists())
                 finally:stop()

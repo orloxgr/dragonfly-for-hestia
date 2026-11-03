@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.1 · 2026-11-04
+
+- Fix startup health checks treating transient snapshot-loading responses as bad administrator credentials. Retry LOADING/BUSY/TRYAGAIN until authenticated PONG or an actual failure, without an addon work deadline.
+- Write `DFLY_proactor_threads=0` explicitly for automatic mode, overriding inherited defaults while preserving unrelated startup settings.
+- Preserve safe protocol error codes without exposing raw native replies. Show controlled restored/pending-recovery messages to administrators instead of the generic account-loading error.
+- Avoid immediately repeating failed recovery while rendering its error page; keep the undo journal until successful recovery.
+- Exercise native restarts with an existing snapshot, 2048 MiB and both explicit/automatic thread modes, validating tenant authentication, stored data, budget and journal completion.
+
 ## 0.7.0 · 2026-11-04
 
 - Replace the narrow 29-command tenant allowlist with native data/transaction categories and tested EVAL/EVALSHA and DUMP/RESTORE support. Native DB/key-prefix ACLs remain mandatory; global administration, destructive global flushes and unrestricted SCRIPT management stay denied.

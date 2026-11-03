@@ -123,6 +123,9 @@ $bridge = static function (array $payload) use ($root, $meta): array {
 $pageError = '';
 if ($code !== 0 || !is_array($data) || empty($data['ok'])) {
     if ($jsonResponse) {
+        if ($adminOverview && in_array($data['error_code'] ?? '', ['resize_restored', 'resize_recovery_pending'], true)) {
+            $respond(503, ['ok' => false, 'error' => $data['error'], 'error_code' => $data['error_code']]);
+        }
         $respond(403, ['ok' => false, 'error' => 'Request refused or service unavailable.']);
     }
     // Hestia intercepts 4xx pages. Render form errors normally; JSON requests
@@ -138,7 +141,14 @@ if ($code !== 0 || !is_array($data) || empty($data['ok'])) {
             $pageError = 'The memory size could not be applied. Check the size and native Dragonfly service; an interrupted change is recovered on the next request.';
         }
     }
-    [$status, $current] = $bridge(['actor' => $actor, 'owner' => $owner, 'action' => $adminOverview ? 'admin-inventory' : 'inventory']);
+    $resizeError = $adminOverview && in_array($data['error_code'] ?? '', ['resize_restored', 'resize_recovery_pending'], true);
+    if ($resizeError) $pageError = (string)$data['error'];
+    if (($data['error_code'] ?? '') === 'resize_recovery_pending') {
+        // Avoid immediately repeating the same failed recovery from an error page.
+        $status = 1; $current = null;
+    } else {
+        [$status, $current] = $bridge(['actor' => $actor, 'owner' => $owner, 'action' => $adminOverview ? 'admin-inventory' : 'inventory']);
+    }
     $data = $status === 0 && is_array($current) && !empty($current['ok']) ? $current : ['sites' => []];
 } elseif ($jsonResponse) {
     $respond(200, $data);
