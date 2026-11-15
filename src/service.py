@@ -233,6 +233,9 @@ def recover_pending():
 
 
 def reconcile(hestia, mutation=None):
+    # Silent for panel/cron calls; the administrator installer opts in.
+    import progress
+    progress.stage('Recovering pending Dragonfly configuration transactions')
     recover_pending()
     config = effective_config()
     inventory = collect(hestia)
@@ -246,7 +249,9 @@ def reconcile(hestia, mutation=None):
         validate(state, config)
         transaction.begin(STORE, transaction_paths())
         try:
+            progress.stage('Applying native Dragonfly ACLs and verifying tenant access')
             result = apply(state,previous,config)
+            progress.stage('Cleaning retired tenant data and committing the registry')
             result.update(cleanup_retired(state,config))
             if old != state:
                 write_json(desired_path,state)

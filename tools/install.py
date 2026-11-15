@@ -13,7 +13,6 @@ import shutil
 import socket
 import subprocess
 import sys
-import traceback
 import urllib.request
 
 SOURCE = Path(__file__).resolve().parents[1]
@@ -24,8 +23,10 @@ from inventory import collect
 from registry import desired_state
 import service
 import deployment
+import progress
 from resp import Client,text
 
+META = json.loads((SOURCE / 'addon.json').read_text())
 VERSION = '2.0.2'
 SHA256 = '348132783a88e0a18ff2f3748523444957f139d2b9165ac759c84400c9010902'
 PACKAGE_URL = 'https://github.com/dragonflydb/dragonfly/releases/download/v2.0.2/dragonfly_amd64.deb'
@@ -36,6 +37,7 @@ RECEIPT = service.STORE/'install-receipt.json'
 
 
 def run(*args,**options):
+    progress.stage('Command: ' + shlex.join(args))
     result = subprocess.run(args,capture_output=True,timeout=None,**options)
     if result.returncode:
         for label, output in (('stdout', result.stdout), ('stderr', result.stderr)):
@@ -47,6 +49,7 @@ def run(*args,**options):
 
 
 def install_package():
+    progress.stage('Downloading and verifying the official Dragonfly package')
     cache = Path('/var/cache/dragonfly-for-hestia')
     cache.mkdir(mode=0o755,parents=True,exist_ok=True)
     package = cache/'dragonfly_amd64.deb'
@@ -139,6 +142,7 @@ def initialize(args):
 
 
 def install(args):
+    progress.stage('Checking platform and native Hestia installation')
     if os.geteuid() != 0:
         raise ValueError('Run this installer as root')
     release = dict(line.split('=',1) for line in Path('/etc/os-release').read_text().splitlines() if '=' in line)
@@ -152,18 +156,22 @@ def install(args):
     if not PENDING.exists() and (service.CONFIG/'settings.json').exists() and service.settings().get('installed'):
         if args.memory_mb is not None and args.memory_mb*1024*1024 != service.settings()['maxmemory']:
             raise ValueError('Existing memory budget is preserved; change maxmemory in settings.json and reconcile')
+        progress.stage('Existing installation found; retaining credentials, memory and worker settings')
         validate_binary()
         try:
+            progress.stage('Publishing addon code and Hestia panel integration')
             run('python3',str(SOURCE/'tools/install-integration.py'))
-            service.reconcile(hestia)
+            progress.stage('Reconciling native accounts, ACLs and service settings')
+            state, config, result = service.reconcile(hestia)
         except Exception:
             deployment.rollback()
             raise
         deployment.commit()
-        print(json.dumps({'ok':True,'mode':'upgrade-or-reinstall','credentials_preserved':True}))
-        return
+        return {'ok':True,'mode':'upgrade-or-reinstall','credentials_preserved':True,
+                'accounts':len(state['owners']), **result}
     resumed = PENDING.exists()
     if resumed:
+        progress.stage('Resuming the saved interrupted installation')
         info=PENDING.stat()
         if PENDING.is_symlink() or info.st_uid != 0 or info.st_mode & 0o077:
             raise ValueError('Unexpected pending installation')
@@ -177,6 +185,7 @@ def install(args):
             if path.is_symlink() or (path.exists() and '# Managed by dragonfly-for-hestia' not in path.read_text()):
                 raise ValueError('Refusing unmanaged integration files')
     else:
+        progress.stage('Preparing initial installation or adoption')
         record=initialize(args)
     state=desired_state(record['state'],collect(hestia),'dragonfly')
     config=record['config']; config['installed']=False
@@ -189,6 +198,7 @@ def install(args):
     backup.mkdir(mode=0o700,exist_ok=True)
     if old_desired.exists():
         write(backup/'desired.json',old_desired.read_bytes())
+    progress.stage('Preparing private service settings, startup environment and tenant ACLs')
     write_json(service.CONFIG/'settings.json',config)
     capacity = max(config['minimum_databases'],state['required_database_capacity'])
     try:
@@ -210,9 +220,11 @@ def install(args):
         os.chown(service.CONFIG,0,gid);service.CONFIG.chmod(0o750)
         os.chown(service.CONFIG/'users.acl',0,gid);(service.CONFIG/'users.acl').chmod(0o640)
         run('systemctl','daemon-reload');run('systemctl','restart','dragonfly')
+        progress.stage('Waiting for authenticated native readiness, including snapshot loading')
         service.wait_healthy(config)
         with service.admin(config) as connection:
             connection.command('SELECT',capacity-1)
+        progress.stage('Verifying tenant database access and authentication')
         for row in state['owners'].values():
             if service.prefixes(row,config):
                 with Client(row['password'],row['username'],config['port']) as connection:
@@ -220,6 +232,7 @@ def install(args):
                         raise RuntimeError('Tenant authentication failed')
         write_json(service.STORE/'desired.json',state)
         write_json(service.STORE/'applied.json',state)
+        progress.stage('Publishing addon code and Hestia panel integration')
         run('python3',str(SOURCE/'tools/install-integration.py'))
         config['installed'] = True
         write_json(service.CONFIG/'settings.json',config)
@@ -227,9 +240,9 @@ def install(args):
         run('systemctl','enable','dragonfly')
         os.replace(PENDING,RECEIPT);sync_directory(service.STORE)
         deployment.commit()
-        print(json.dumps({'ok':True,'resumed':resumed,'mode':'adopt' if manifest else 'fresh',
-                          'accounts':len(state['owners']),'database_capacity':capacity,
-                          'credentials_preserved':bool(manifest)}))
+        return {'ok':True,'resumed':resumed,'mode':'adopt' if manifest else 'fresh',
+                'accounts':len(state['owners']),'database_capacity':capacity,
+                'credentials_preserved':bool(manifest)}
     except Exception:
         DROPIN.unlink(missing_ok=True);CRON.unlink(missing_ok=True)
         config['installed'] = False;write_json(service.CONFIG/'settings.json',config)
@@ -243,21 +256,22 @@ def install(args):
         raise
 
 
+def perform(args):
+    if args.memory_mb is not None and args.memory_mb <= 0:
+        raise ValueError('Choose a positive cache memory budget in MiB')
+    from operations import exclusive
+    progress.stage('Waiting for the addon operation lock')
+    with exclusive():
+        progress.stage('Operation lock acquired')
+        return install(args)
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--adopt',metavar='PRIVATE_MANIFEST')
     parser.add_argument('--port',type=int,default=6379)
     parser.add_argument('--memory-mb',type=int,default=None)
+    parser.add_argument('--json', action='store_true', help='Write the final result as JSON to stdout; progress stays on stderr')
     args = parser.parse_args()
-    try:
-        if args.memory_mb is not None and args.memory_mb <= 0:
-            raise ValueError('Choose a cache memory budget of at least 64 MiB')
-        from operations import exclusive
-        with exclusive():
-            install(args)
-    except Exception as error:
-        # This is the administrator's installer, not a hosting-user response.
-        traceback.print_exc(file=sys.stderr)
-        print(json.dumps({'ok':False,'error_type':type(error).__name__,
-                          'error':str(error)}))
-        raise SystemExit(1)
+    raise SystemExit(progress.execute(lambda: perform(args), title=META['title'],
+                                     version=META['version'], json_output=args.json))

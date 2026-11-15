@@ -2,12 +2,15 @@
 import pwd
 from pathlib import Path
 import subprocess
+import progress
 
 
 def collect(hestia):
+    progress.stage('Reading native Hestia accounts')
     users = hestia('v-list-users', 'json')
     result = {}
-    for owner, row in sorted(users.items()):
+    for number, (owner, row) in enumerate(sorted(users.items()), 1):
+        progress.stage('Account ' + str(number) + '/' + str(len(users)) + ': ' + owner + ' - reading domains')
         # Directory birth time survives password/package changes but differs for
         # replacement accounts, even if name/UID/creation-second are recycled.
         directory = Path('/usr/local/hestia/data/users') / owner
@@ -23,4 +26,5 @@ def collect(hestia):
                              'suspended':web.get('SUSPENDED') == 'yes'}
                      for domain, web in domains.items()},
         }
+    progress.stage('Inventory complete: ' + str(len(result)) + ' accounts, ' + str(sum(len(row['sites']) for row in result.values())) + ' domains')
     return result

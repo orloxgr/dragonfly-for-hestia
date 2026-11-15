@@ -1,7 +1,7 @@
 # Dragonfly for Hestia
 
 One shared Dragonfly service, separate credentials for each Hestia user and a
-separate cache prefix for each site. Version **0.7.1** · GPL-3.0-or-later.
+separate cache prefix for each site. Version **0.7.2** · GPL-3.0-or-later.
 
 ## Quick start
 
@@ -95,3 +95,18 @@ see the [administration reference](docs/administration.md).
 See the 0.7.0 [changelog](CHANGELOG.md) for completion, native controls and compatibility changes. Existing service budgets and credentials are preserved on update.
 
 Version 0.7.1 waits through native snapshot loading during resize/recovery, explicitly writes zero for automatic threads, and reports controlled recovery errors in the administrator panel. Updating also completes any pending resize recovery through the existing installer.
+
+## Installer console output
+
+The installer prints timestamped installation/update stages to stderr and a readable
+final summary to stdout, including the version, actual result details and elapsed
+time. During slow work or a lock wait it reports the current stage every ten seconds;
+this is progress reporting, not an execution deadline. Failures show the last stage,
+specific cause and technical diagnostics, and exit with a nonzero status.
+
+Add `--json` to the same install command for a single machine-readable JSON result
+on stdout; progress stays on stderr. Panel/API, internal CLI and background-job
+interfaces retain their existing JSON output and do not emit installer progress.
+Terminal color is optional; redirected logs are plain text and `NO_COLOR` disables
+color. Existing credentials, settings and private data follow the same preservation
+rules as before.

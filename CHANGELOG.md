@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.2 · 2026-11-15
+
+- Show timestamped installer stages, actual work counts where available and a current-stage heartbeat during slow work or lock waits. Reporting adds no work deadline and stays silent outside the administrator installer.
+- Replace the default final JSON dump with a readable success/failure summary, installed version, full result details and elapsed time. Retain explicit `--json` mode with progress/diagnostics on stderr and one JSON document on stdout; preserve native failure details and nonzero exit status.
+- Keep panel, background and internal JSON interfaces unchanged. Respect `NO_COLOR` and plain redirected logs; a closed reporting stream cannot cancel completed installation work.
+
 ## 0.7.1 · 2026-11-04
 
 - Fix startup health checks treating transient snapshot-loading responses as bad administrator credentials. Retry LOADING/BUSY/TRYAGAIN until authenticated PONG or an actual failure, without an addon work deadline.
